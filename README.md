@@ -1,2 +1,2 @@
-# TFM
-TFM 2021
+With the advent of Next-Generation Sequencing (NGS) techniques, enormous amounts of genomic data are being obtained, which has enabled a great advance in clinical genetic diagnosis. However, the large number of genetic variants that are detected makes the work of analysts difficult. The American College of Medical Genetics (ACMG) has published guidelines for the clinical classification of variants, taking into account different criteria (population frequency of the variant, type of mutation, etc.). The manual application of this classification is usually a cumbersome and time-consuming activity.
+In this project its has been developed a web app that perform semi-automatic clasification of genetic variants using the new recommendations and reviews of the ACMG guidelines. 
