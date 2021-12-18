@@ -2,14 +2,24 @@ library(myvariant)
 library(biomaRt)
 library(knitr)
 
-# Carga los dataset necesarios
+
+
+# Load the required datasets
+
+#List of constraint scoring GnomAD
 oe.lof<-read.csv("gnomad.v2.1.1.lof_metrics.by_gene.txt",sep = "")
+#List of Gene LOF intolerant
 PVS1.lof<-read.csv("PVS1.LOF.genes.hg19.csv", header = F)
+#List of aminoacid change for missens variants
 miss.aa<-read.csv("missense_aa.csv",sep = ",")
+#list of hot spot protein domains
 uniprot<-read.csv("protein.domain.csv",sep = "\t")
+#Database of repated regions
 rmsk<-read.csv("rmsk.csv", sep="\t")
+#List of gene not affected by missense variants
 BP1.gene<-read.csv("BP1.genes.hg19.csv", sep="", header=F)
 gwas.clean<-read.csv("gwas.clean.csv")
+#List of genes and inheritance asociated 
 omim.clean<-read.csv("omim.clean.csv")
 
 ensembl = useEnsembl(biomart='ensembl', 
@@ -18,7 +28,7 @@ cadd.pvs<-c("CANONICAL_SPLICE","STOP_GAINED","STOP_LOST")
 review<-c("criteria provided, multiple submitters, no conflicts",
           "criteria provided, single submitter","reviewed by expert panel")
 
-# Valores de corte
+# cutoff values
 oe.cutoff=0.35
 mis.cutoff=3.09
 mis.z<-oe.lof[oe.lof$mis_z>mis.cutoff,] 
@@ -26,14 +36,14 @@ af.cutoff=0.01
 prior.prob<-0.1
 odds.path<-350
 
-# Carga los el archivo con los ids de las variantes
+# Loads the Variant Ids for validation of the scripts
 validation<-read.csv("validation.csv", sep=";")
 valid<-as.vector(validation$id)
 
-#Genera el objeto con los datos de las variantes
+#Generate the objet with the data of the variants
 variants<-getVariants(valid, fields = "all", return.as = "records")
 
-# Genera el data.frame vacío
+# Generate a empty dataframe
 names<-c("ID","Gene", "Clasification","Post_P","PVS1",
          "PS1","PS2","PS3", "PS4",
          "PM1","PM2", "PM3", "PM4","PM5","PM6", 
@@ -47,7 +57,7 @@ df<-as.data.frame(matrix(c(rep(NA,4),rep(0,33),rep(NA,7)), length(variants), len
 colnames(df)<-names
 
 for(var in 1:length(variants)){
-  # Completa los datos de la variante
+   # Complete the variants general data
   df$ID[var]<-variants[[var]]$`_id`
   if(is.null(variants[[var]]$hg19)==F){
     positions <- data.frame(chromosome =variants[[var]]$chrom,
@@ -66,7 +76,7 @@ for(var in 1:length(variants)){
     df$Gene[var]<-variants[[var]]$dbnsfp$genename
   }
   
-  #BA1 busca en las distintas base de datos si la frecuencia alélica es >0.05
+  # BA1 Looks if the variant has a AF  >0.05
   
   
   if((is.null(variants[[var]]$cadd$esp$af)|is.null(variants[[var]]$gnomad_genome$af$af)|is.null(variants[[var]]$gnomad_exome$af$af)|
@@ -79,7 +89,7 @@ for(var in 1:length(variants)){
   
   
   
-  # PVS1. Si el gen está en la lista de LoF y si es una variante nula
+  # PVS1. If the gen is in the LoF list and if is a Null variant
   
   
   if (is.null(variants[[var]]$cadd$consequence)==F){
@@ -107,7 +117,7 @@ for(var in 1:length(variants)){
   }
   
   
-  # PS1 & PM5. Si la variante es missense, mira el tipo de cambio de aminoacido
+  # PS1 & PM5. If is a missense variant it search for the aminoacid change
   
   if(is.null(variants[[var]]$cadd$consdetail)==F){
     if(variants[[var]]$cadd$consdetail=="missense"){
@@ -179,7 +189,7 @@ for(var in 1:length(variants)){
     }
   }
   
-  # BS1 Si la frecuencia alelica es mayor a la frec PopMax de Gnomad
+  # BS1  If the AF is higher than the Gnomad PopMax Frecuency
   
   
   if(is.null(variants[[var]]$gnomad_exome$af$af_popmax)==F&is.null(variants[[var]]$gnomad_exome$af$af)==F){
@@ -190,11 +200,27 @@ for(var in 1:length(variants)){
     if(variants[[var]]$gnomad_exome$af$af>af.cutoff){
       df$BS1[var]=1
     }
+  }else if(is.null(variants[[var]]$cadd$esp$af)==F){
+    if(variants[[var]]$cadd$esp$af>af.cutoff){
+      df$BS1[var]=1
+    } 
+  }else if(is.null(variants[[var]]$dbnsfp$`1000gp3`$af)==F){
+    if(variants[[var]]$dbnsfp$`1000gp3`$af>af.cutoff){
+      df$BS1[var]=1
+    }
+  }else if(is.null(variants[[var]]$cadd$`1000g`$af)==F){
+    if(variants[[var]]$cadd$`1000g`$af>af.cutoff){
+      df$BS1[var]=1
+    }
+  }else if(is.null(variants[[var]]$gnomad_genome$af$af)==F){
+    if(variants[[var]]$gnomad_genome$af$af>af.cutoff){
+      df$BS1[var]=1
+    }
   }
   
   
   
-  # PM2. Si la variante no aparece en ninguna de las basese poblacionales
+  # PM2. If the variant doesn't appears in the population databases
   
   
   if((is.null(variants[[var]]$cadd$esp$af)&is.null(variants[[var]]$gnomad_genome$af$af)&is.null(variants[[var]]$gnomad_exome$af$af)|
@@ -202,7 +228,7 @@ for(var in 1:length(variants)){
     df$PM2[var]=1
   }
   
-  #BS2. Si se observa la variante en algun control sano según el tipo de patologia
+  # BS2. If the variant appears in a healthy control by the type of inheritance
   
   if(df$PM2[var]==0){
     if (is.null(variants[[var]]$gnomad_exome)==F){
@@ -238,8 +264,7 @@ for(var in 1:length(variants)){
   
   
   
-  # PS4. Si la variante se encuentra en el listado de OR>0.5 de la base de datos GWAS
-  
+  # PS4. If th e variant is found in the GWAS list of  OR>0.5 
   
   
   if(is.null(variants[[var]]$dbsnp$rsid)==F){
@@ -257,7 +282,7 @@ for(var in 1:length(variants)){
   }
   
   
-  # PM1. Para variantes missense que alteran el dominio proteico ya conocido de patogenicidad
+  # PM1. If a missense variant that affect a critical domain
   
   
   if(is.null(variants[[var]]$cadd$consdetail)==F&is.null(variants[[var]]$dbnsfp$interpro_domain)==F&
@@ -272,7 +297,7 @@ for(var in 1:length(variants)){
   }
   
   
-  # PM4 BP3. Segun si la variante se afecta un región de repetición
+  # PM4 BP3. If the variant affects a non-repeated/repetition region
   
   
   if(is.null(variants[[var]]$cadd$consequence)==F){
@@ -308,7 +333,7 @@ for(var in 1:length(variants)){
     }
   }
   
-  # PP3 BP4. Según la predicciones de distintos algoritmos
+  # PP3 BP4. By the prediction of different algorithms
   
   pred.s<-c()
   if(is.null(variants[[var]]$dbnsfp$provean$pred[1])==F){
@@ -361,7 +386,8 @@ for(var in 1:length(variants)){
   pred.s<-c()
   
   
-  #PP2. Si la variante missense afecta un gen suceptible de missense
+  # PP2. If a missense variant affects a gene missense variants are a common mechanism of disease
+  
   
   
   if(is.null(variants[[var]]$cadd$consdetail)==F){
@@ -375,7 +401,7 @@ for(var in 1:length(variants)){
   }
   
   
-  #BP1. Si la variante missense afecta un gen no susceptible de missense
+  # BP1. If a missense variant affects a gene for which primarily truncating variants are known to cause disease
   
   if(df$PP2[var]==0){
   if(is.null(variants[[var]]$cadd$consdetail)==F){
@@ -390,7 +416,8 @@ for(var in 1:length(variants)){
   }
   
   
-  #PP5 BP6. Si la variante ya ha sido clasificada con evidencia
+  # PP5 BP6 If the variant has been classified by reputable source
+  
   
   rcv.clasi<-c()
   rcv.review<-c()
@@ -442,7 +469,7 @@ for(var in 1:length(variants)){
     }
   }
   
-  # Calcula la Probabilidad Post
+  #  # Calculate the PostProbability
   
   df$PS[var]<-sum(df[var,c("PS1","PS2","PS3","PS4")])
   df$PM[var]<-sum(df[var,c("PM1","PM2","PM3","PM4", "PM5", "PM6")])
@@ -459,7 +486,7 @@ for(var in 1:length(variants)){
     df$odd.BS[var]*df$odd.BP[var]
   df$Post_P[var]<-round((df$comb.odd[var]*prior.prob)/((df$comb.odd[var]-1)*prior.prob+1),3)
   
-  # Clseifica según la probabilidad post
+  # Clasify the variant by the PostProbability
   if(df$BA1[var]==1){
     df$Clasification[var]<-"Benign"
   }else if(df$Post_P[var]>0.99){
